@@ -17,6 +17,8 @@ public class PathUtils {
     private static final char CLOSE = '}';
     private static final char SLASH = '/';
     private static final Pattern TRIM_PATTERN = Pattern.compile("^/*(.*?)/*$");
+    private static final String ALPHANUM_PATTERN = "[\\pL\\pN\\p{Pc}/_-]";
+    private static final Pattern NON_REGEX_ID_PATTERN = Pattern.compile("\\{\\w+:\\s*(" + ALPHANUM_PATTERN + "+)}");
 
     public static String parsePath(String uri, Map<String, String> patterns) {
         if (uri == null) {
@@ -24,6 +26,18 @@ public class PathUtils {
         } else if (StringUtils.isBlank(uri)) {
             return String.valueOf(SLASH);
         }
+        // djl: If the uri contains a parameter definition, but the path pattern contains
+        // no regular expression patterns, we ignore the parameter, and just return the
+        // path literal.
+        Matcher matcher = NON_REGEX_ID_PATTERN.matcher(uri);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, matcher.group(1));
+        }
+        matcher.appendTail(sb);
+        uri = sb.toString();
+        // djl: end
+        
         CharacterIterator ci = new StringCharacterIterator(uri);
         StringBuilder pathBuffer = new StringBuilder();
         char c = ci.first();
