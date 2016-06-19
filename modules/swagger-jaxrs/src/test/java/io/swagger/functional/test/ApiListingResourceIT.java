@@ -53,7 +53,7 @@ public class ApiListingResourceIT {
 
     @Test
     public void testSwaggerJson() throws Exception {
-        String actualBody = given()
+        String actualBody = given().port(8888)
                 .log().all()
                 .when()
                 .get("/swagger.json")
@@ -70,7 +70,7 @@ public class ApiListingResourceIT {
 
     @Test
     public void testSwaggerJsonUsingAcceptHeader() throws Exception {
-        String actualBody = given()
+        String actualBody = given().port(8888)
                 .log().all()
                 .accept(ContentType.JSON)
                 .when()
@@ -87,7 +87,7 @@ public class ApiListingResourceIT {
 
     @Test
     public void testSwaggerYaml() throws Exception {
-        String actualBody = given()
+        String actualBody = given().port(8888)
                 .log().all()
                 .when()
                 .get("/swagger.yaml")
@@ -103,7 +103,7 @@ public class ApiListingResourceIT {
 
     @Test
     public void testSwaggerYamlUsingAcceptHeader() throws Exception {
-        String actualBody = given()
+        String actualBody = given().port(8888)
                 .log().all()
                 .accept("application/yaml")
                 .when()
