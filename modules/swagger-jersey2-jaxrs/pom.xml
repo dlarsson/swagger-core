@@ -4,14 +4,13 @@
     <parent>
         <groupId>io.swagger</groupId>
         <artifactId>swagger-project</artifactId>
-        <version>1.5.10-SNAPSHOT</version>
+        <version>1.5.9.gt</version>
         <relativePath>../..</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <groupId>io.swagger</groupId>
     <artifactId>swagger-jersey2-jaxrs</artifactId>
     <packaging>jar</packaging>
-    <version>1.5.10-SNAPSHOT</version>
     <name>swagger-jersey2-jaxrs (Jersey 2.x support)</name>
     <build>
         <sourceDirectory>src/main/java</sourceDirectory>
