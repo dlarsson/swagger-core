@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LongProperty extends BaseIntegerProperty {
-    private static final String FORMAT = "int64";
+    public static final String FORMAT = "int64";
     protected Long _default;
     protected List<Long> _enum;
 
@@ -61,6 +61,11 @@ public class LongProperty extends BaseIntegerProperty {
 
     public LongProperty vendorExtension(String key, Object obj) {
         this.setVendorExtension(key, obj);
+        return this;
+    }
+
+    public LongProperty readOnly() {
+        this.setReadOnly(Boolean.TRUE);
         return this;
     }
 

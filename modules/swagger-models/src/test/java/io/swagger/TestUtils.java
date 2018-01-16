@@ -206,7 +206,7 @@ public class TestUtils {
                     try {
                         getMethod = PowerMockito.method(clazz, getterMethodName);
                     } catch (MethodNotFoundException ex) {
-                        LOGGER.log(Level.INFO, ex.getMessage(), ex);
+                        LOGGER.log(Level.INFO, ex.getMessage());
                         continue;
                     }
                     Class<?> retType = getMethod.getReturnType();
@@ -220,7 +220,7 @@ public class TestUtils {
                 try {
                     Whitebox.setInternalState(instance, "_enum", (Object) null);
                 } catch (FieldNotFoundException ex) {
-                    LOGGER.log(Level.INFO, ex.getMessage(), ex);
+                    LOGGER.log(Level.INFO, ex.getMessage());
                 }
 
                 Whitebox.invokeMethod(instance, method.getName(), parametersArray);
@@ -249,7 +249,7 @@ public class TestUtils {
                     Object actual = Whitebox.invokeMethod(instance, getterMethodName);
                     Whitebox.invokeMethod(instance, method.getName(), parametersArray);
                     res = Whitebox.invokeMethod(instance, getterMethodName);
-                    assertEquals(actual, res, "the value must not change when passing an unkown value to " + method);
+                    assertEquals(actual, res, "the value must not change when passing an unknown value to " + method);
                 }
             }
         }

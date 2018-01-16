@@ -24,6 +24,10 @@ public interface Property {
 
     void setDescription(String title);
 
+    Boolean getAllowEmptyValue();
+
+    void setAllowEmptyValue(Boolean value);
+
     @JsonIgnore
     String getName();
 
@@ -65,4 +69,11 @@ public interface Property {
     void setAccess(String access);
 
     Map<String, Object> getVendorExtensions();
+
+    /**
+     * creates a new instance and renames the property to the given name.
+     *
+     * @return new shallow copy of the property
+     */
+    Property rename(String newName);
 }

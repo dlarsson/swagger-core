@@ -3,11 +3,11 @@ package io.swagger.models;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class License {
-    private final Map<String, Object> vendorExtensions = new HashMap<String, Object>();
+    private Map<String, Object> vendorExtensions = new LinkedHashMap<String, Object>();
     private String name;
     private String url;
 
@@ -49,12 +49,17 @@ public class License {
         }
     }
 
+    public void setVendorExtensions(Map<String, Object> vendorExtensions) {
+        this.vendorExtensions = vendorExtensions;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
         int result = 1;
         result = prime * result + ((name == null) ? 0 : name.hashCode());
         result = prime * result + ((url == null) ? 0 : url.hashCode());
+        result = prime * result + ((vendorExtensions == null) ? 0 : vendorExtensions.hashCode());
         return result;
     }
 
@@ -82,6 +87,13 @@ public class License {
                 return false;
             }
         } else if (!url.equals(other.url)) {
+            return false;
+        }
+        if (vendorExtensions == null) {
+            if (other.vendorExtensions != null) {
+                return false;
+            }
+        } else if (!vendorExtensions.equals(other.vendorExtensions)) {
             return false;
         }
         return true;

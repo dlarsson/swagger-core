@@ -5,7 +5,7 @@ import io.swagger.models.Xml;
 import java.util.List;
 
 public class BinaryProperty extends AbstractProperty implements Property {
-    private static final String TYPE = "string";
+    public static final String TYPE = "string";
     protected List<String> _enum;
     protected Integer minLength = null, maxLength = null;
     protected String pattern = null;
@@ -49,6 +49,11 @@ public class BinaryProperty extends AbstractProperty implements Property {
 
     public BinaryProperty vendorExtension(String key, Object obj) {
         this.setVendorExtension(key, obj);
+        return this;
+    }
+
+    public BinaryProperty readOnly() {
+        this.setReadOnly(Boolean.TRUE);
         return this;
     }
 

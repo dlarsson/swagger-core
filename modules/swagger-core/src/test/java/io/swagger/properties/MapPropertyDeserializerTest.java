@@ -1,16 +1,18 @@
-package io.swagger;
+package io.swagger.properties;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
-
-import org.testng.annotations.Test;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.models.Operation;
 import io.swagger.models.Response;
 import io.swagger.models.properties.IntegerProperty;
 import io.swagger.models.properties.MapProperty;
 import io.swagger.models.properties.Property;
 import io.swagger.util.Json;
+import io.swagger.util.Yaml;
+import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
 public class MapPropertyDeserializerTest {
   private static final String json = "{" +
@@ -39,7 +41,7 @@ public class MapPropertyDeserializerTest {
       "}";
 
   @Test(description = "it should deserialize a response per #1349")
-  public void testMapDerserilization () throws Exception {
+  public void testMapDeserialization () throws Exception {
 
       Operation operation = Json.mapper().readValue(json, Operation.class);
       Response response = operation.getResponses().get("200");
@@ -54,7 +56,7 @@ public class MapPropertyDeserializerTest {
   }
 
   @Test(description = "vendor extensions should be included with object type")
-  public void testMapDeserilizationVendorExtensions () throws Exception {
+  public void testMapDeserializationVendorExtensions () throws Exception {
     Operation operation = Json.mapper().readValue(json, Operation.class);
     Response response = operation.getResponses().get("200");
     assertNotNull(response);
@@ -67,4 +69,35 @@ public class MapPropertyDeserializerTest {
     assertNotNull(mp.getVendorExtensions().get("x-foo"));
     assertEquals(mp.getVendorExtensions().get("x-foo"), "vendor x");
   }
+
+    @Test(description = "it should read an example within an inlined schema")
+    public void testIssue1261InlineSchemaExample() throws Exception {
+        Operation operation = Yaml.mapper().readValue("      produces:\n" +
+                "        - application/json\n" +
+                "      responses:\n" +
+                "        200:\n" +
+                "          description: OK\n" +
+                "          schema:\n" +
+                "            type: object\n" +
+                "            properties:\n" +
+                "              id:\n" +
+                "                type: integer\n" +
+                "                format: int32\n" +
+                "              name:\n" +
+                "                type: string\n" +
+                "            required: [id, name]\n" +
+                "            example:\n" +
+                "              id: 42\n" +
+                "              name: Arthur Dent\n", Operation.class);
+
+        Response response = operation.getResponses().get("200");
+        assertNotNull(response);
+        Property schema = response.getSchema();
+        Object example = schema.getExample();
+        assertNotNull(example);
+        assertTrue(example instanceof ObjectNode);
+        ObjectNode objectNode = (ObjectNode) example;
+        assertEquals(objectNode.get("id").intValue(), 42);
+        assertEquals(objectNode.get("name").textValue(), "Arthur Dent");
+    }
 }

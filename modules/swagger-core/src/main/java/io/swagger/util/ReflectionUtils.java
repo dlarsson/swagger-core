@@ -1,14 +1,24 @@
 package io.swagger.util;
 
-import com.fasterxml.jackson.databind.type.TypeFactory;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
+import com.google.common.collect.Sets;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.lang.annotation.Annotation;
-import java.lang.reflect.*;
-import java.util.*;
+import com.fasterxml.jackson.databind.type.TypeFactory;
 
 public class ReflectionUtils {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReflectionUtils.class);
@@ -17,6 +27,9 @@ public class ReflectionUtils {
         final PrimitiveType primitive = PrimitiveType.fromName(type);
         if (primitive != null) {
             return primitive.getKeyClass();
+        }
+        if (StringUtils.isBlank(type)) {
+            return null;
         }
         try {
             return loadClassByName(type);
@@ -33,36 +46,41 @@ public class ReflectionUtils {
      * @return Class definition of className
      * @throws ClassNotFoundException
      */
-    public static Class<?> loadClassByName(String className) throws ClassNotFoundException
-    {
-        try
-        {
+    public static Class<?> loadClassByName(String className) throws ClassNotFoundException {
+        try {
             return Class.forName(className);
-        }
-        catch (ClassNotFoundException e)
-        {
+        } catch (ClassNotFoundException e) {
             return Thread.currentThread().getContextClassLoader().loadClass(className);
         }
     }
 
     /**
-     * Checks if the method methodToFind is the overridden method from the superclass.
+     * Checks if the method methodToFind is the overridden method from the superclass or superinterface.
      *
      * @param methodToFind is method to check
      * @param cls          is method class
      * @return true if the method is overridden method
      */
     public static boolean isOverriddenMethod(Method methodToFind, Class<?> cls) {
-        Class<?> superClass = cls.getSuperclass();
-        if (superClass != null && !(superClass.equals(Object.class))) {
-            for (Method method : superClass.getMethods()) {
-                if (method.getName().equals(methodToFind.getName()) && method.getReturnType().isAssignableFrom(methodToFind.getReturnType())
-                        && Arrays.equals(method.getParameterTypes(), methodToFind.getParameterTypes()) &&
-                        !Arrays.equals(method.getGenericParameterTypes(), methodToFind.getGenericParameterTypes())) {
+        Set<Class<?>> superClasses = Sets.newHashSet(cls.getInterfaces());
+
+        if (cls.getSuperclass() != null) {
+            superClasses.add(cls.getSuperclass());
+        }
+
+        for (Class<?> superClass : superClasses) {
+            if (superClass != null && !(superClass.equals(Object.class))) {
+                for (Method method : superClass.getMethods()) {
+                    if (method.getName().equals(methodToFind.getName()) && method.getReturnType().isAssignableFrom(methodToFind.getReturnType())
+                            && Arrays.equals(method.getParameterTypes(), methodToFind.getParameterTypes()) && !Arrays.equals(method.getGenericParameterTypes(), methodToFind.getGenericParameterTypes())) {
+                        return true;
+                    }
+                }
+                if (isOverriddenMethod(methodToFind, superClass)) {
                     return true;
                 }
             }
-            return isOverriddenMethod(methodToFind, superClass);
+
         }
         return false;
     }
@@ -99,6 +117,9 @@ public class ReflectionUtils {
      * @return method if it is found
      */
     public static Method findMethod(Method methodToFind, Class<?> cls) {
+        if (cls == null) {
+            return null;
+        }
         String methodToSearch = methodToFind.getName();
         Class<?>[] soughtForParameterType = methodToFind.getParameterTypes();
         Type[] soughtForGenericParameterType = methodToFind.getGenericParameterTypes();
@@ -118,7 +139,7 @@ public class ReflectionUtils {
     }
 
     private static boolean hasIdenticalParameters(Class<?>[] srcParameterTypes, Class<?>[] soughtForParameterType,
-            Type[] srcGenericParameterTypes, Type[] soughtForGenericParameterType) {
+                                                  Type[] srcGenericParameterTypes, Type[] soughtForGenericParameterType) {
         for (int j = 0; j < soughtForParameterType.length; j++) {
             Class<?> parameterType = soughtForParameterType[j];
             if (!(srcParameterTypes[j].equals(parameterType) || (!srcGenericParameterTypes[j].equals(soughtForGenericParameterType[j]) &&
@@ -185,6 +206,12 @@ public class ReflectionUtils {
     public static <A extends Annotation> A getAnnotation(Method method, Class<A> annotationClass) {
         A annotation = method.getAnnotation(annotationClass);
         if (annotation == null) {
+            for (Annotation metaAnnotation : method.getAnnotations()) {
+                annotation = metaAnnotation.annotationType().getAnnotation(annotationClass);
+                if (annotation != null) {
+                    return annotation;
+                }
+            }
             Method superclassMethod = getOverriddenMethod(method);
             if (superclassMethod != null) {
                 annotation = getAnnotation(superclassMethod, annotationClass);
@@ -196,6 +223,13 @@ public class ReflectionUtils {
     public static <A extends Annotation> A getAnnotation(Class<?> cls, Class<A> annotationClass) {
         A annotation = cls.getAnnotation(annotationClass);
         if (annotation == null) {
+            for (Annotation metaAnnotation : cls.getAnnotations()) {
+                annotation = metaAnnotation.annotationType().getAnnotation(annotationClass);
+                if (annotation != null) {
+                    return annotation;
+                }
+                ;
+            }
             Class<?> superClass = cls.getSuperclass();
             if (superClass != null && !(superClass.equals(Object.class))) {
                 annotation = getAnnotation(superClass, annotationClass);
@@ -203,6 +237,13 @@ public class ReflectionUtils {
         }
         if (annotation == null) {
             for (Class<?> anInterface : cls.getInterfaces()) {
+                for (Annotation metaAnnotation : anInterface.getAnnotations()) {
+                    annotation = metaAnnotation.annotationType().getAnnotation(annotationClass);
+                    if (annotation != null) {
+                        return annotation;
+                    }
+                    ;
+                }
                 annotation = getAnnotation(anInterface, annotationClass);
                 if (annotation != null) {
                     return annotation;
@@ -211,34 +252,34 @@ public class ReflectionUtils {
         }
         return annotation;
     }
-    
+
     public static Annotation[][] getParameterAnnotations(Method method) {
-	Annotation[][] methodAnnotations = method.getParameterAnnotations();
-	Method overriddenmethod = getOverriddenMethod(method);
+        Annotation[][] methodAnnotations = method.getParameterAnnotations();
+        Method overriddenmethod = getOverriddenMethod(method);
 
-	if (overriddenmethod != null) {
-	    Annotation[][] overriddenAnnotations = overriddenmethod
-		    .getParameterAnnotations();
+        if (overriddenmethod != null) {
+            Annotation[][] overriddenAnnotations = overriddenmethod
+                    .getParameterAnnotations();
 
-	    for (int i = 0; i < methodAnnotations.length; i++) {
-		List<Type> types = new ArrayList<Type>();
-		for (int j = 0; j < methodAnnotations[i].length; j++) {
-		    types.add(methodAnnotations[i][j].annotationType());
-		}
-		for (int j = 0; j < overriddenAnnotations[i].length; j++) {
-		    if (!types.contains(overriddenAnnotations[i][j]
-			    .annotationType())) {
-			methodAnnotations[i] = ArrayUtils.add(
-				methodAnnotations[i],
-				overriddenAnnotations[i][j]);
-		    }
-		}
+            for (int i = 0; i < methodAnnotations.length; i++) {
+                List<Type> types = new ArrayList<Type>();
+                for (int j = 0; j < methodAnnotations[i].length; j++) {
+                    types.add(methodAnnotations[i][j].annotationType());
+                }
+                for (int j = 0; j < overriddenAnnotations[i].length; j++) {
+                    if (!types.contains(overriddenAnnotations[i][j]
+                            .annotationType())) {
+                        methodAnnotations[i] = ArrayUtils.add(
+                                methodAnnotations[i],
+                                overriddenAnnotations[i][j]);
+                    }
+                }
 
-	    }
-	}
-	return methodAnnotations;
+            }
+        }
+        return methodAnnotations;
     }
-    
+
     /**
      * Checks if the type is void.
      *

@@ -4,13 +4,14 @@
     <parent>
         <groupId>io.swagger</groupId>
         <artifactId>swagger-project</artifactId>
-        <version>1.5.9.gt</version>
+        <version>1.5.18.gt-SNAPSHOT</version>
         <relativePath>../..</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <groupId>io.swagger</groupId>
     <artifactId>swagger-jersey-jaxrs</artifactId>
     <packaging>jar</packaging>
+    <version>1.5.18.gt-SNAPSHOT</version>
     <name>swagger-jersey-jaxrs</name>
     <build>
         <sourceDirectory>src/main/java</sourceDirectory>
@@ -29,14 +30,6 @@
             </testResource>
         </testResources>
         <plugins>
-            <plugin>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.0</version>
-                <configuration>
-                    <source>1.6</source>
-                    <target>1.6</target>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>

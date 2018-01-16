@@ -3,7 +3,7 @@ package io.swagger.models;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class Info {
@@ -13,7 +13,7 @@ public class Info {
     private String termsOfService;
     private Contact contact;
     private License license;
-    private Map<String, Object> vendorExtensions = new HashMap<String, Object>();
+    private Map<String, Object> vendorExtensions = new LinkedHashMap<String, Object>();
 
     public Info version(String version) {
         this.setVersion(version);
@@ -130,6 +130,10 @@ public class Info {
         if (name.startsWith("x-")) {
             vendorExtensions.put(name, value);
         }
+    }
+	
+	public void setVendorExtensions(Map<String, Object> vendorExtensions) {
+        this.vendorExtensions = vendorExtensions;
     }
 
     @Override

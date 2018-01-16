@@ -2,6 +2,7 @@ package io.swagger.models.parameters;
 
 import io.swagger.models.properties.Property;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public interface SerializableParameter extends Parameter {
@@ -24,6 +25,10 @@ public interface SerializableParameter extends Parameter {
     List<String> getEnum();
 
     void setEnum(List<String> _enum);
+
+    List<Object> getEnumValue();
+
+    void setEnumValue(List<?> enumValue);
 
     Integer getMaxLength();
 
@@ -53,13 +58,13 @@ public interface SerializableParameter extends Parameter {
 
     void setExclusiveMinimum(Boolean exclusiveMinimum);
 
-    Double getMaximum();
+    BigDecimal getMaximum();
 
-    void setMaximum(Double maximum);
+    void setMaximum(BigDecimal maximum);
 
-    Double getMinimum();
+    BigDecimal getMinimum();
 
-    void setMinimum(Double minimum);
+    void setMinimum(BigDecimal minimum);
 
     Integer getMaxItems();
 

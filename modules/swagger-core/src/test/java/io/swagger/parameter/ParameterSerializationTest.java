@@ -1,12 +1,11 @@
 package io.swagger.parameter;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.matchers.SerializationMatchers;
 import io.swagger.models.ArrayModel;
 import io.swagger.models.ModelImpl;
 import io.swagger.models.RefModel;
+import io.swagger.models.Swagger;
 import io.swagger.models.parameters.BodyParameter;
 import io.swagger.models.parameters.HeaderParameter;
 import io.swagger.models.parameters.Parameter;
@@ -17,12 +16,14 @@ import io.swagger.models.properties.IntegerProperty;
 import io.swagger.models.properties.RefProperty;
 import io.swagger.models.properties.StringProperty;
 import io.swagger.util.Json;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.util.Yaml;
 import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 public class ParameterSerializationTest {
     private final ObjectMapper m = Json.mapper();
@@ -255,6 +256,19 @@ public class ParameterSerializationTest {
         SerializationMatchers.assertEqualsToJson(p, json);
     }
 
+    @Test(description = "it should deserialize a read only parameter")
+    public void deserializeReadOnlyParameter() throws IOException {
+        final String json =
+                "{" +
+                "   \"in\":\"path\"," +
+                "   \"required\":false," +
+                "   \"type\":\"string\"," +
+                "   \"readOnly\":\"true\"" +
+                "}";
+        final Parameter p = m.readValue(json, Parameter.class);
+        assertTrue(p.isReadOnly());
+    }
+
     @Test(description = "it should serialize a ref BodyParameter")
     public void serializeRefBodyParameter() {
         final RefModel model = new RefModel("Cat");
@@ -335,6 +349,48 @@ public class ParameterSerializationTest {
         assertEquals(((PathParameter) p).getEnum(), Arrays.asList("a", "b", "c"));
     }
 
+    @Test(description = "it should deserialize a number path parameter with enum")
+    public void deserializeNumberEnumPathParameter() throws IOException {
+        final String json = "{" +
+                "   \"in\":\"path\"," +
+                "   \"required\":true," +
+                "   \"items\":{" +
+                "      \"type\":\"integer\"" +
+                "   }," +
+                "   \"enum\":[1,2,3]" +
+                "}";
+        final Parameter p = m.readValue(json, Parameter.class);
+        SerializationMatchers.assertEqualsToJson(p, json);
+
+        assertEquals(((PathParameter) p).getEnumValue(), Arrays.asList(1,2,3));
+    }
+
+    @Test(description = "should serialize correctly typed numeric enums")
+    public void testIssue1765() throws Exception {
+        String yaml =
+                "swagger: '2.0'\n" +
+                        "paths:\n" +
+                        "  /test:\n" +
+                        "    get:\n" +
+                        "      parameters:\n" +
+                        "      - name: \"days\"\n" +
+                        "        in: \"path\"\n" +
+                        "        required: true\n" +
+                        "        type: \"integer\"\n" +
+                        "        format: \"int32\"\n" +
+                        "        enum:\n" +
+                        "        - 1\n" +
+                        "        - 2\n" +
+                        "        - 3\n" +
+                        "        - 4\n" +
+                        "        - 5\n" +
+                        "      responses:\n" +
+                        "        default:\n" +
+                        "          description: great";
+
+        Swagger swagger = Yaml.mapper().readValue(yaml, Swagger.class);
+        SerializationMatchers.assertEqualsToYaml(swagger, yaml);
+    }
     @Test(description = "should serialize string value")
     public void testStringValue() {
         final QueryParameter param = new QueryParameter();
@@ -410,5 +466,19 @@ public class ParameterSerializationTest {
         param.setFormat("double");
         final String json = "{\"in\":\"query\",\"required\":false,\"type\":\"number\",\"default\":\"test\",\"format\":\"double\"}";
         SerializationMatchers.assertEqualsToJson(param, json);
+    }
+
+    @Test(description = "should mark a parameter as readOnly")
+    public void testReadOnlyParameter() throws Exception {
+        final QueryParameter qp = new QueryParameter().readOnly(true);
+        final String json = "{\"in\":\"query\",\"required\":false,\"readOnly\":true}";
+        SerializationMatchers.assertEqualsToJson(qp, json);
+    }
+
+    @Test(description = "should mark a parameter as to allow empty value")
+    public void testAllowEmptyValueParameter() throws Exception {
+        final QueryParameter qp = new QueryParameter().allowEmptyValue(true);
+        final String json = "{\"in\":\"query\",\"required\":false,\"allowEmptyValue\":true}";
+        SerializationMatchers.assertEqualsToJson(qp, json);
     }
 }

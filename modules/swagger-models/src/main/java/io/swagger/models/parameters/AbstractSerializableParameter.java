@@ -3,17 +3,22 @@ package io.swagger.models.parameters;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.swagger.models.properties.ArrayProperty;
 import io.swagger.models.properties.BaseIntegerProperty;
 import io.swagger.models.properties.BooleanProperty;
 import io.swagger.models.properties.DecimalProperty;
+import io.swagger.models.properties.DoubleProperty;
+import io.swagger.models.properties.FloatProperty;
+import io.swagger.models.properties.IntegerProperty;
+import io.swagger.models.properties.LongProperty;
 import io.swagger.models.properties.Property;
 import io.swagger.models.properties.StringProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @JsonPropertyOrder({ "name", "in", "description", "required", "type", "items", "collectionFormat", "default", "maximum",
@@ -25,14 +30,16 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
     protected String format;
     protected String collectionFormat;
     protected Property items;
-    protected List<String> _enum;
     protected Boolean exclusiveMaximum;
-    protected Double maximum;
+    protected BigDecimal maximum;
     protected Boolean exclusiveMinimum;
-    protected Double minimum;
+    protected BigDecimal minimum;
     protected String example;
     private Integer maxItems;
     private Integer minItems;
+
+    @JsonIgnore
+    protected List<String> _enum;
 
     /**
      * See http://json-schema.org/latest/json-schema-validation.html#anchor26
@@ -98,6 +105,16 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
         return castThis();
     }
 
+    public T allowEmptyValue(Boolean allowEmpty) {
+        this.setAllowEmptyValue(allowEmpty);
+        return castThis();
+    }
+
+    public T readOnly(Boolean readOnly) {
+        this.setReadOnly(readOnly);
+        return castThis();
+    }
+
     @JsonIgnore
     protected String getDefaultCollectionFormat() {
         return "csv";
@@ -113,6 +130,7 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
         return castThis();
     }
 
+    @JsonIgnore
     @Override
     public List<String> getEnum() {
         return _enum;
@@ -121,6 +139,85 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
     @Override
     public void setEnum(List<String> _enum) {
         this._enum = _enum;
+    }
+
+    @JsonProperty("enum")
+    @Override
+    public List<Object> getEnumValue() {
+        if (_enum == null) return null;
+        if (_enum.isEmpty()) return Collections.emptyList();
+        List<Object> oList = new ArrayList<Object>(_enum.size());
+
+        if (BaseIntegerProperty.TYPE.equals(type) || DecimalProperty.TYPE.equals(type)) {
+            for (String s : _enum) {
+                try {
+                    if ("int32".equals(format)) {
+                        oList.add(Integer.valueOf(s));
+                    } else if ("int64".equals(format)) {
+                        oList.add(Long.valueOf(s));
+                    } else if ("double".equals(format)) {
+                        oList.add(Double.valueOf(s));
+                    } else if ("float".equals(format)) {
+                        oList.add(Float.valueOf(s));
+                    } else if (BaseIntegerProperty.TYPE.equals(type)) {
+                        oList.add(Integer.valueOf(s));
+                    } else if (DecimalProperty.TYPE.equals(type)) {
+                        oList.add(Double.valueOf(s));
+                    }
+                } catch (NumberFormatException e) {
+                    LOGGER.warn(String.format("Illegal enum value %s for parameter type %s", s, type), e);
+                    oList.add(s);
+                }
+            }
+        } else if ((type == null || "array".equals(type)) && items != null) {
+            for (String s : _enum) {
+                try {
+                    if (items instanceof StringProperty) {
+                        oList.add(s);
+                    } else if (items instanceof IntegerProperty) {
+                        oList.add(Integer.valueOf(s));
+                    } else if (items instanceof LongProperty) {
+                        oList.add(Long.valueOf(s));
+                    } else if (items instanceof FloatProperty) {
+                        oList.add(Float.valueOf(s));
+                    } else if (items instanceof DoubleProperty) {
+                        oList.add(Double.valueOf(s));
+                    } else if (items instanceof BaseIntegerProperty) {
+                        oList.add(Integer.valueOf(s));
+                    } else if (items instanceof DecimalProperty) {
+                        oList.add(Double.valueOf(s));
+                    } else {
+                        oList.add(s);
+                    }
+                } catch (NumberFormatException e) {
+                    LOGGER.warn(String.format("Illegal enum value %s for parameter type %s", s, type), e);
+                    oList.add(s);
+                }
+            }
+
+        } else {
+            for (String s: _enum) {
+                oList.add(s);
+            }
+        }
+        return oList;
+    }
+
+    @Override
+    public void setEnumValue(List<?> enumValue) {
+        if (enumValue == null) {
+            this._enum = null;
+            return;
+        }
+        if (enumValue.isEmpty()) {
+            this._enum = Collections.emptyList();
+            return;
+        }
+        List<String> sList = new ArrayList<String>(enumValue.size());
+        for (Object item: enumValue) {
+            sList.add(item.toString());
+        }
+        this._enum = sList;
     }
 
     @Override
@@ -170,13 +267,38 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
         if (property instanceof StringProperty) {
             final StringProperty string = (StringProperty) property;
             setEnum(string.getEnum());
+        } else if (property instanceof IntegerProperty) {
+            setEnumValue(((IntegerProperty) property).getEnum());
+        } else if (property instanceof LongProperty) {
+            setEnumValue(((LongProperty) property).getEnum());
+        } else if (property instanceof FloatProperty) {
+            setEnumValue(((FloatProperty) property).getEnum());
+        } else if (property instanceof DoubleProperty) {
+            setEnumValue(((DoubleProperty) property).getEnum());
         } else if (property instanceof ArrayProperty) {
             final ArrayProperty array = (ArrayProperty) property;
             setItems(array.getItems());
         }
     }
 
-    public String getDefaultValue() {
+    public Object getDefaultValue() {
+        if(defaultValue == null) {
+            return null;
+        }
+
+        // don't return a default value if types fail to convert
+        try {
+            if ("integer".equals(this.type)) {
+                return new Integer(defaultValue);
+            }
+            if ("number".equals(this.type)) {
+                return new BigDecimal(defaultValue);
+            }
+        }
+        catch (Exception e) {
+            return null;
+        }
+
         return defaultValue;
     }
 
@@ -214,12 +336,12 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
     }
 
     @Override
-    public Double getMaximum() {
+    public BigDecimal getMaximum() {
         return maximum;
     }
 
     @Override
-    public void setMaximum(Double maximum) {
+    public void setMaximum(BigDecimal maximum) {
         this.maximum = maximum;
     }
 
@@ -234,12 +356,12 @@ public abstract class AbstractSerializableParameter<T extends AbstractSerializab
     }
 
     @Override
-    public Double getMinimum() {
+    public BigDecimal getMinimum() {
         return minimum;
     }
 
     @Override
-    public void setMinimum(Double minimum) {
+    public void setMinimum(BigDecimal minimum) {
         this.minimum = minimum;
     }
 

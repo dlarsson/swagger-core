@@ -1,21 +1,58 @@
 package io.swagger;
 
 import io.swagger.jaxrs.Reader;
+import io.swagger.models.ExternalDocs;
 import io.swagger.models.Operation;
 import io.swagger.models.Swagger;
 import io.swagger.models.Tag;
-import io.swagger.models.parameters.*;
-import io.swagger.resources.*;
+import io.swagger.models.parameters.BodyParameter;
+import io.swagger.models.parameters.FormParameter;
+import io.swagger.models.parameters.HeaderParameter;
+import io.swagger.models.parameters.Parameter;
+import io.swagger.models.parameters.PathParameter;
+import io.swagger.models.parameters.QueryParameter;
+import io.swagger.resources.AnnotatedInterfaceImpl;
+import io.swagger.resources.ApiConsumesProducesResource;
+import io.swagger.resources.ApiMultipleConsumesProducesResource;
+import io.swagger.resources.BookResource;
+import io.swagger.resources.BothConsumesProducesResource;
+import io.swagger.resources.DescendantResource;
+import io.swagger.resources.IndirectImplicitParamsImpl;
+import io.swagger.resources.NoConsumesProducesResource;
+import io.swagger.resources.Resource1970;
+import io.swagger.resources.ResourceWithAnnotationsOnlyInInterfaceImpl;
+import io.swagger.resources.ResourceWithClassLevelApiResourceNoMethodLevelApiResources;
+import io.swagger.resources.ResourceWithCustomException;
+import io.swagger.resources.ResourceWithCustomExceptionAndClassLevelApiResource;
+import io.swagger.resources.ResourceWithDeprecatedMethod;
+import io.swagger.resources.ResourceWithEmptyPath;
+import io.swagger.resources.ResourceWithExternalDocs;
+import io.swagger.resources.ResourceWithImplicitFileParam;
+import io.swagger.resources.ResourceWithImplicitParams;
+import io.swagger.resources.ResourceWithKnownInjections;
+import io.swagger.resources.ResourceWithValidation;
+import io.swagger.resources.RsConsumesProducesResource;
+import io.swagger.resources.RsMultipleConsumesProducesResource;
+import io.swagger.resources.SimpleMethods;
 import org.testng.annotations.Test;
 
-import javax.ws.rs.*;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.HEAD;
+import javax.ws.rs.OPTIONS;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.core.MediaType;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 public class ReaderTest {
     private static final String APPLICATION_XML = "application/xml";
@@ -56,6 +93,14 @@ public class ReaderTest {
         assertEquals(getPut(swagger, "/{id}/value").getProduces().get(0), TEXT_PLAIN);
     }
 
+    @Test(description = "scan consumes and produces values with api class level annotations")
+    public void scanMultipleConsumesProducesValuesWithApiClassLevelAnnotations() {
+        Swagger swagger = getSwagger(ApiMultipleConsumesProducesResource.class);
+        assertEquals(getGet(swagger, "/{id}").getConsumes(), Arrays.asList(MediaType.APPLICATION_XHTML_XML, MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON));
+        assertEquals(getGet(swagger, "/{id}").getProduces(), Arrays.asList(MediaType.APPLICATION_ATOM_XML, MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML));
+
+    }
+
     @Test(description = "scan consumes and produces values with rs class level annotations")
     public void scanConsumesProducesValuesWithRsClassLevelAnnotations() {
         Swagger swagger = getSwagger(RsConsumesProducesResource.class);
@@ -69,6 +114,13 @@ public class ReaderTest {
         assertEquals(getPut(swagger, "/{id}/value").getProduces().get(0), TEXT_PLAIN);
         assertEquals(getPut(swagger, "/split").getProduces(), Arrays.asList("image/jpeg",  "image/gif", "image/png"));
         assertEquals(getPut(swagger, "/split").getConsumes(), Arrays.asList("image/jpeg",  "image/gif", "image/png"));
+    }
+
+    @Test(description = "scan multiple consumes and produces values with rs class level annotations")
+    public void scanMultipleConsumesProducesValuesWithRsClassLevelAnnotations() {
+        Swagger swagger = getSwagger(RsMultipleConsumesProducesResource.class);
+        assertEquals(getGet(swagger, "/{id}").getConsumes(), Arrays.asList(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML));
+        assertEquals(getGet(swagger, "/{id}").getProduces(), Arrays.asList(MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON));
     }
 
     @Test(description = "scan consumes and produces values with both class level annotations")
@@ -157,13 +209,27 @@ public class ReaderTest {
         assertNotNull(swagger.getPath("/v1/users/{id}").getGet());
     }
 
+    @Test(description = "scan indirect implicit params from interface")
+    public void scanImplicitParamInterfaceTest() {
+        final Swagger swagger = new Reader(new Swagger()).read(IndirectImplicitParamsImpl.class);
+        assertNotNull(swagger);
+        assertEquals(swagger.getPath("/v1/users/{id}").getGet().getParameters().size(), 2);
+    }
+
+    @Test(description = "scan indirect implicit params from overridden method")
+    public void scanImplicitParamOverriddenMethodTest() {
+        final Swagger swagger = new Reader(new Swagger()).read(IndirectImplicitParamsImpl.class);
+        assertNotNull(swagger);
+        assertEquals(swagger.getPath("/v1/users").getPost().getParameters().size(), 2);
+    }
+
     @Test(description = "scan implicit params")
     public void scanImplicitParam() {
         Swagger swagger = getSwagger(ResourceWithImplicitParams.class);
-
         List<Parameter> params = swagger.getPath("/testString").getPost().getParameters();
         assertNotNull(params);
-        assertEquals(params.size(), 7);
+        assertEquals(params.size(), 8);
+
         assertEquals(params.get(0).getName(), "sort");
         assertEquals(params.get(0).getIn(), "query");
 
@@ -176,12 +242,12 @@ public class ReaderTest {
         HeaderParameter headerParam = (HeaderParameter) params.get(2);
         assertEquals(headerParam.getName(), "size");
         assertEquals(headerParam.getIn(), "header");
-        assertEquals(headerParam.getMinimum(), 1.0);
+        assertEquals(headerParam.getMinimum(), new BigDecimal(1.0));
 
         FormParameter formParam = (FormParameter) params.get(3);
         assertEquals(formParam.getName(), "width");
         assertEquals(formParam.getIn(), "formData");
-        assertEquals(formParam.getMaximum(), 1.0);
+        assertEquals(formParam.getMaximum(), new BigDecimal(1.0));
 
         assertEquals(params.get(4).getName(), "width");
         assertEquals(params.get(4).getIn(), "formData");
@@ -189,13 +255,20 @@ public class ReaderTest {
         QueryParameter queryParam = (QueryParameter) params.get(5);
         assertEquals(queryParam.getName(), "height");
         assertEquals(queryParam.getIn(), "query");
-        assertEquals(queryParam.getMinimum(), 3.0);
-        assertEquals(queryParam.getMaximum(), 4.0);
+        assertEquals(queryParam.getMinimum(), new BigDecimal(3.0));
+        assertEquals(queryParam.getMaximum(), new BigDecimal(4.0));
 
         BodyParameter bodyParam = (BodyParameter) params.get(6);
         assertEquals(bodyParam.getName(), "body");
         assertEquals(bodyParam.getIn(), "body");
         assertTrue(bodyParam.getRequired());
+
+        queryParam = (QueryParameter) params.get(7);
+        assertEquals(queryParam.getName(), "description");
+        assertEquals(queryParam.getIn(), "query");
+        // see https://github.com/swagger-api/swagger-core/issues/2556. should be not null
+        assertNull(queryParam.getType());
+
     }
 
     @Test(description = "scan implicit params with file objct")
@@ -231,7 +304,7 @@ public class ReaderTest {
         Parameter description = parameters.get(0);
         assertTrue(description instanceof PathParameter);
         assertEquals(description.getName(), "description");
-        assertEquals(description.getDescription(), "Overriden description");
+        assertEquals(description.getDescription(), "Overridden description");
 
         Parameter id = parameters.get(1);
         assertTrue(id instanceof PathParameter);
@@ -257,15 +330,15 @@ public class ReaderTest {
 
         QueryParameter par = (QueryParameter) swagger.getPaths().get("/303").getOperations().get(0).getParameters().get(0);
         assertTrue(par.getRequired());
-        assertEquals(par.getMinimum(), 10D);
+        assertEquals(par.getMinimum(), new BigDecimal(10));
 
         par = (QueryParameter) swagger.getPaths().get("/swagger-and-303").getOperations().get(0).getParameters().get(0);
         assertTrue(par.getRequired());
-        assertEquals(par.getMinimum(), 7D);
+        assertEquals(par.getMinimum(), new BigDecimal(7));
 
         par = (QueryParameter) swagger.getPaths().get("/swagger").getOperations().get(0).getParameters().get(0);
         assertTrue(par.getRequired());
-        assertEquals(par.getMinimum(), 7D);
+        assertEquals(par.getMinimum(), new BigDecimal(7));
     }
 
     @Test(description = "scan resource with annotated exception")
@@ -336,6 +409,28 @@ public class ReaderTest {
         assertNotNull(parameters);
         assertEquals(parameters.size(), 1);
         assertEquals(parameters.get(0).getName(), "petImplicitIdParam");
+    }
+
+    @Test(description = "scan resource per #1970")
+    public void scanBigDecimal() {
+        Swagger swagger = getSwagger(Resource1970.class);
+        assertNotNull(swagger);
+
+        PathParameter parameter = (PathParameter)swagger.getPath("/v1/{param1}").getGet().getParameters().get(0);
+        assertEquals(parameter.getType(), "number");
+    }
+
+    @Test(description = "scan external docs on method")
+    public void scanExternalDocsOnMethod() {
+        Swagger swagger = getSwagger(ResourceWithExternalDocs.class);
+
+        ExternalDocs externalDocsForGet = swagger.getPath("/testString").getGet().getExternalDocs();
+        assertNull(externalDocsForGet);
+
+        ExternalDocs externalDocsForPost = swagger.getPath("/testString").getPost().getExternalDocs();
+        assertNotNull(externalDocsForPost);
+        assertEquals("Test Description", externalDocsForPost.getDescription());
+        assertEquals("https://swagger.io/", externalDocsForPost.getUrl());
     }
 
     private Swagger getSwagger(Class<?> cls) {
