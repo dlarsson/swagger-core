@@ -1185,12 +1185,31 @@ public class Reader implements OpenApiReader {
             type = rawType;
         }
 
-        if (method.getAnnotation(javax.ws.rs.Path.class) != null) {
+        if (getInheritedAnnotation(javax.ws.rs.Path.class, method) != null) {
             if (ReaderUtils.extractOperationMethod(method, null) == null) {
                 return type;
             }
         }
         return null;
+    }
+
+    private <T extends Annotation> T getInheritedAnnotation(Class<T> cls, Method method) {
+       T annotation = method.getAnnotation(cls);
+       if (annotation != null) {
+          return annotation;
+       } else {
+          Class<?> superclass = method.getDeclaringClass().getSuperclass();
+          if (superclass != null) {
+             try {
+                Method overridden = superclass.getMethod(method.getName(), method.getParameterTypes());
+                return getInheritedAnnotation(cls, overridden);
+             } catch (NoSuchMethodException | SecurityException ex) {
+                return null;
+             }
+          } else {
+             return null;
+          }
+       }
     }
 
     private static Class<?> getClassArgument(Type cls) {
