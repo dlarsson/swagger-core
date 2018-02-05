@@ -837,8 +837,12 @@ public class Reader implements OpenApiReader {
 
         // handle return type, add as response in case.
         Type returnType = method.getGenericReturnType();
+        Type rawType = returnType;
+        if (returnType instanceof ParameterizedType) {
+           rawType = ((ParameterizedType) returnType).getRawType();
+        }
         final Class<?> subResource = getSubResourceWithJaxRsSubresourceLocatorSpecs(method);
-        if (!shouldIgnoreClass(returnType.getTypeName()) && !returnType.equals(subResource)) {
+        if (!shouldIgnoreClass(returnType.getTypeName()) && !rawType.equals(subResource)) {
             ResolvedSchema resolvedSchema = ModelConverters.getInstance().resolveAnnotatedType(returnType, new ArrayList<>(), "");
             if (resolvedSchema.schema != null) {
                 Schema returnTypeSchema = resolvedSchema.schema;
