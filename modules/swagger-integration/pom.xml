@@ -53,6 +53,6 @@
 		</plugins>
 	</build>
 	<properties>
-		<swagger.version>2.0.0-SNAPSHOT</swagger.version>
+		<swagger.version>2.0.0gt-SNAPSHOT</swagger.version>
 	</properties>
 </project>
