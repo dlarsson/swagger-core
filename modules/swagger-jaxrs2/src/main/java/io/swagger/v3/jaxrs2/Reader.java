@@ -1,10 +1,12 @@
 package io.swagger.v3.jaxrs2;
 
+import com.fasterxml.jackson.annotation.JsonView;
 import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.introspect.AnnotatedMethod;
 import com.fasterxml.jackson.databind.introspect.AnnotatedParameter;
 import com.fasterxml.jackson.databind.type.TypeFactory;
+import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.core.converter.ResolvedSchema;
 import io.swagger.v3.core.util.AnnotationsUtils;
@@ -249,6 +251,8 @@ public class Reader implements OpenApiReader {
             return openAPI;
         }
 
+        io.swagger.v3.oas.annotations.responses.ApiResponse[] classResponses = ReflectionUtils.getRepeatableAnnotationsArray(cls, io.swagger.v3.oas.annotations.responses.ApiResponse.class);
+
         List<io.swagger.v3.oas.annotations.security.SecurityScheme> apiSecurityScheme = ReflectionUtils.getRepeatableAnnotations(cls, io.swagger.v3.oas.annotations.security.SecurityScheme.class);
         List<io.swagger.v3.oas.annotations.security.SecurityRequirement> apiSecurityRequirements = ReflectionUtils.getRepeatableAnnotations(cls, io.swagger.v3.oas.annotations.security.SecurityRequirement.class);
 
@@ -357,10 +361,10 @@ public class Reader implements OpenApiReader {
         final List<Parameter> globalParameters = new ArrayList<>();
 
         // look for constructor-level annotated properties
-        globalParameters.addAll(ReaderUtils.collectConstructorParameters(cls, components, classConsumes));
+        globalParameters.addAll(ReaderUtils.collectConstructorParameters(cls, components, classConsumes, null));
 
         // look for field-level annotated properties
-        globalParameters.addAll(ReaderUtils.collectFieldParameters(cls, components, classConsumes));
+        globalParameters.addAll(ReaderUtils.collectFieldParameters(cls, components, classConsumes, null));
 
         // iterate class methods
         Method methods[] = cls.getMethods();
@@ -375,6 +379,7 @@ public class Reader implements OpenApiReader {
             if (ReflectionUtils.isOverriddenMethod(method, cls)) {
                 continue;
             }
+
             javax.ws.rs.Path methodPath = ReflectionUtils.getAnnotation(method, javax.ws.rs.Path.class);
 
             String operationPath = ReaderUtils.getPath(apiPath, methodPath, parentPath);
@@ -404,6 +409,12 @@ public class Reader implements OpenApiReader {
                     }
                 }
 
+                io.swagger.v3.oas.annotations.Operation apiOperation = ReflectionUtils.getAnnotation(method, io.swagger.v3.oas.annotations.Operation.class);
+                JsonView jsonViewAnnotation = ReflectionUtils.getAnnotation(method, JsonView.class);
+                if (apiOperation != null && apiOperation.ignoreJsonView()) {
+                    jsonViewAnnotation = null;
+                }
+
 
                 Operation operation = parseMethod(
                         method,
@@ -418,7 +429,9 @@ public class Reader implements OpenApiReader {
                         classServers,
                         isSubresource,
                         parentRequestBody,
-                        parentResponses
+                        parentResponses,
+                        jsonViewAnnotation,
+                        classResponses
                         );
                 if (operation != null) {
 
@@ -428,7 +441,20 @@ public class Reader implements OpenApiReader {
                         Type[] genericParameterTypes = method.getGenericParameterTypes();
                         for (int i = 0; i < genericParameterTypes.length; i++) {
                             final Type type = TypeFactory.defaultInstance().constructType(genericParameterTypes[i], cls);
-                            ResolvedParameter resolvedParameter = getParameters(type, Arrays.asList(paramAnnotations[i]), operation, classConsumes, methodConsumes);
+                            io.swagger.v3.oas.annotations.Parameter paramAnnotation = AnnotationsUtils.getAnnotation(io.swagger.v3.oas.annotations.Parameter.class, paramAnnotations[i]);
+                            Type paramType = ParameterProcessor.getParameterType(paramAnnotation);
+                            if (paramType == null) {
+                                paramType = type;
+                            } else {
+                                if (paramType instanceof Class) {
+                                    if (((Class)paramType).isAssignableFrom(String.class)) {
+                                        paramType = type;
+                                    }
+                                } else {
+                                    paramType = type;
+                                }
+                            }
+                            ResolvedParameter resolvedParameter = getParameters(paramType, Arrays.asList(paramAnnotations[i]), operation, classConsumes, methodConsumes, jsonViewAnnotation);
                             for (Parameter p : resolvedParameter.parameters) {
                                 operationParameters.add(p);
                             }
@@ -440,14 +466,28 @@ public class Reader implements OpenApiReader {
                                         classConsumes,
                                         operationParameters,
                                         paramAnnotations[i],
-                                        type);
+                                        type,
+                                        jsonViewAnnotation);
                             }
                         }
                     } else {
                         for (int i = 0; i < annotatedMethod.getParameterCount(); i++) {
                             AnnotatedParameter param = annotatedMethod.getParameter(i);
                             final Type type = TypeFactory.defaultInstance().constructType(param.getParameterType(), cls);
-                            ResolvedParameter resolvedParameter = getParameters(type, Arrays.asList(paramAnnotations[i]), operation, classConsumes, methodConsumes);
+                            io.swagger.v3.oas.annotations.Parameter paramAnnotation = AnnotationsUtils.getAnnotation(io.swagger.v3.oas.annotations.Parameter.class, paramAnnotations[i]);
+                            Type paramType = ParameterProcessor.getParameterType(paramAnnotation);
+                            if (paramType == null) {
+                                paramType = type;
+                            } else {
+                                if (paramType instanceof Class) {
+                                    if (((Class)paramType).isAssignableFrom(String.class)) {
+                                        paramType = type;
+                                    }
+                                } else {
+                                    paramType = type;
+                                }
+                            }
+                            ResolvedParameter resolvedParameter = getParameters(paramType, Arrays.asList(paramAnnotations[i]), operation, classConsumes, methodConsumes, jsonViewAnnotation);
                             for (Parameter p : resolvedParameter.parameters) {
                                 operationParameters.add(p);
                             }
@@ -459,7 +499,8 @@ public class Reader implements OpenApiReader {
                                         classConsumes,
                                         operationParameters,
                                         paramAnnotations[i],
-                                        type);
+                                        type,
+                                        jsonViewAnnotation);
                             }
                         }
                     }
@@ -562,11 +603,12 @@ public class Reader implements OpenApiReader {
     protected void processRequestBody(Parameter requestBodyParameter, Operation operation,
                                       Consumes methodConsumes, Consumes classConsumes,
                                       List<Parameter> operationParameters,
-                                      Annotation[] paramAnnotations, Type type) {
+                                      Annotation[] paramAnnotations, Type type,
+                                      JsonView jsonViewAnnotation) {
 
         io.swagger.v3.oas.annotations.parameters.RequestBody requestBodyAnnotation = getRequestBody(Arrays.asList(paramAnnotations));
         if (requestBodyAnnotation != null) {
-            Optional<RequestBody> optionalRequestBody = OperationParser.getRequestBody(requestBodyAnnotation, classConsumes, methodConsumes, components);
+            Optional<RequestBody> optionalRequestBody = OperationParser.getRequestBody(requestBodyAnnotation, classConsumes, methodConsumes, components, jsonViewAnnotation);
             if (optionalRequestBody.isPresent()) {
                 RequestBody requestBody = optionalRequestBody.get();
                 if (StringUtils.isBlank(requestBody.get$ref()) &&
@@ -642,7 +684,8 @@ public class Reader implements OpenApiReader {
 
     public Operation parseMethod(
             Method method,
-            List<Parameter> globalParameters) {
+            List<Parameter> globalParameters,
+            JsonView jsonViewAnnotation) {
         JavaType classType = TypeFactory.defaultInstance().constructType(method.getDeclaringClass());
         return parseMethod(
                 classType.getClass(),
@@ -658,6 +701,8 @@ public class Reader implements OpenApiReader {
                 new ArrayList<>(),
                 false,
                 null,
+                null,
+                jsonViewAnnotation,
                 null);
     }
 
@@ -674,7 +719,9 @@ public class Reader implements OpenApiReader {
             List<io.swagger.v3.oas.models.servers.Server> classServers,
             boolean isSubresource,
             RequestBody parentRequestBody,
-            ApiResponses parentResponses) {
+            ApiResponses parentResponses,
+            JsonView jsonViewAnnotation,
+            io.swagger.v3.oas.annotations.responses.ApiResponse[] classResponses) {
         JavaType classType = TypeFactory.defaultInstance().constructType(method.getDeclaringClass());
         return parseMethod(
                 classType.getClass(),
@@ -690,7 +737,9 @@ public class Reader implements OpenApiReader {
                 classServers,
                 isSubresource,
                 parentRequestBody,
-                parentResponses);
+                parentResponses,
+                jsonViewAnnotation,
+                classResponses);
     }
 
     private Operation parseMethod(
@@ -707,7 +756,9 @@ public class Reader implements OpenApiReader {
             List<io.swagger.v3.oas.models.servers.Server> classServers,
             boolean isSubresource,
             RequestBody parentRequestBody,
-            ApiResponses parentResponses) {
+            ApiResponses parentResponses,
+            JsonView jsonViewAnnotation,
+            io.swagger.v3.oas.annotations.responses.ApiResponse[] classResponses) {
         Operation operation = new Operation();
 
         io.swagger.v3.oas.annotations.Operation apiOperation = ReflectionUtils.getAnnotation(method, io.swagger.v3.oas.annotations.Operation.class);
@@ -728,7 +779,7 @@ public class Reader implements OpenApiReader {
 
         if (apiCallbacks != null) {
             for (io.swagger.v3.oas.annotations.callbacks.Callback methodCallback : apiCallbacks) {
-                Map<String, Callback> currentCallbacks = getCallbacks(methodCallback, methodProduces, classProduces, methodConsumes, classConsumes);
+                Map<String, Callback> currentCallbacks = getCallbacks(methodCallback, methodProduces, classProduces, methodConsumes, classConsumes, jsonViewAnnotation);
                 callbacks.putAll(currentCallbacks);
             }
         }
@@ -779,12 +830,13 @@ public class Reader implements OpenApiReader {
                     apiParameters.toArray(new io.swagger.v3.oas.annotations.Parameter[apiParameters.size()]),
                     classConsumes,
                     methodConsumes,
-                    operation).ifPresent(p -> p.forEach(operation::addParametersItem));
+                    operation,
+                    jsonViewAnnotation).ifPresent(p -> p.forEach(operation::addParametersItem));
         }
 
         // RequestBody in Method
         if (apiRequestBody != null && operation.getRequestBody() == null){
-            OperationParser.getRequestBody(apiRequestBody, classConsumes, methodConsumes, components).ifPresent(
+            OperationParser.getRequestBody(apiRequestBody, classConsumes, methodConsumes, components, jsonViewAnnotation).ifPresent(
                     operation::setRequestBody);
         }
 
@@ -793,8 +845,25 @@ public class Reader implements OpenApiReader {
             operation.setOperationId(getOperationId(method.getName()));
         }
 
+        // classResponses
+        if (classResponses != null && classResponses.length > 0) {
+            OperationParser.getApiResponses(
+                    classResponses,
+                    classProduces,
+                    methodProduces,
+                    components,
+                    jsonViewAnnotation
+            ).ifPresent(responses -> {
+                if (operation.getResponses() == null) {
+                    operation.setResponses(responses);
+                } else {
+                    responses.forEach(operation.getResponses()::addApiResponse);
+                }
+            });
+        }
+
         if (apiOperation != null) {
-            setOperationObjectFromApiOperationAnnotation(operation, apiOperation, methodProduces, classProduces, methodConsumes, classConsumes);
+            setOperationObjectFromApiOperationAnnotation(operation, apiOperation, methodProduces, classProduces, methodConsumes, classConsumes, jsonViewAnnotation);
         }
 
         // apiResponses
@@ -803,7 +872,8 @@ public class Reader implements OpenApiReader {
                     apiResponses.toArray(new io.swagger.v3.oas.annotations.responses.ApiResponse[apiResponses.size()]),
                     classProduces,
                     methodProduces,
-                    components
+                    components,
+                    jsonViewAnnotation
             ).ifPresent(responses -> {
                 if (operation.getResponses() == null) {
                     operation.setResponses(responses);
@@ -852,7 +922,7 @@ public class Reader implements OpenApiReader {
         }
         final Class<?> subResource = getSubResourceWithJaxRsSubresourceLocatorSpecs(method);
         if (!shouldIgnoreClass(returnType.getTypeName()) && !rawType.equals(subResource)) {
-            ResolvedSchema resolvedSchema = ModelConverters.getInstance().resolveAnnotatedType(returnType, new ArrayList<>(), "");
+            ResolvedSchema resolvedSchema = ModelConverters.getInstance().resolveAsResolvedSchema(new AnnotatedType(returnType).resolveAsRef(true).jsonViewAnnotation(jsonViewAnnotation));
             if (resolvedSchema.schema != null) {
                 Schema returnTypeSchema = resolvedSchema.schema;
                 Content content = new Content();
@@ -907,7 +977,8 @@ public class Reader implements OpenApiReader {
             Produces methodProduces,
             Produces classProduces,
             Consumes methodConsumes,
-            Consumes classConsumes) {
+            Consumes classConsumes,
+            JsonView jsonViewAnnotation) {
         Map<String, Callback> callbackMap = new HashMap<>();
         if (apiCallback == null) {
             return callbackMap;
@@ -922,7 +993,8 @@ public class Reader implements OpenApiReader {
                     methodProduces,
                     classProduces,
                     methodConsumes,
-                    classConsumes);
+                    classConsumes,
+                    jsonViewAnnotation);
             setPathItemOperation(pathItemObject, callbackOperation.method(), callbackNewOperation);
         }
 
@@ -970,7 +1042,8 @@ public class Reader implements OpenApiReader {
             Produces methodProduces,
             Produces classProduces,
             Consumes methodConsumes,
-            Consumes classConsumes) {
+            Consumes classConsumes,
+            JsonView jsonViewAnnotation) {
         if (StringUtils.isNotBlank(apiOperation.summary())) {
             operation.setSummary(apiOperation.summary());
         }
@@ -994,7 +1067,7 @@ public class Reader implements OpenApiReader {
             AnnotationsUtils.getExternalDocumentation(apiOperation.externalDocs()).ifPresent(operation::setExternalDocs);
         }
 
-        OperationParser.getApiResponses(apiOperation.responses(), classProduces, methodProduces, components).ifPresent(responses -> {
+        OperationParser.getApiResponses(apiOperation.responses(), classProduces, methodProduces, components, jsonViewAnnotation).ifPresent(responses -> {
             if (operation.getResponses() == null) {
                 operation.setResponses(responses);
             } else {
@@ -1007,7 +1080,8 @@ public class Reader implements OpenApiReader {
                 apiOperation.parameters(),
                 classConsumes,
                 methodConsumes,
-                operation).ifPresent(p -> p.forEach(operation::addParametersItem));
+                operation,
+                jsonViewAnnotation).ifPresent(p -> p.forEach(operation::addParametersItem));
 
         // security
         Optional<List<SecurityRequirement>> requirementsObject = SecurityParser.getSecurityRequirements(apiOperation.security());
@@ -1019,7 +1093,7 @@ public class Reader implements OpenApiReader {
 
         // RequestBody in Operation
         if (apiOperation != null && apiOperation.requestBody() != null && operation.getRequestBody() == null) {
-            OperationParser.getRequestBody(apiOperation.requestBody(), classConsumes, methodConsumes, components).ifPresent(
+            OperationParser.getRequestBody(apiOperation.requestBody(), classConsumes, methodConsumes, components, jsonViewAnnotation).ifPresent(
                     requestBodyObject -> operation.setRequestBody(requestBodyObject));
         }
 
@@ -1065,14 +1139,14 @@ public class Reader implements OpenApiReader {
         return false;
     }
 
-    protected Optional<List<Parameter>> getParametersListFromAnnotation(io.swagger.v3.oas.annotations.Parameter[] parameters, Consumes classConsumes, Consumes methodConsumes, Operation operation) {
+    protected Optional<List<Parameter>> getParametersListFromAnnotation(io.swagger.v3.oas.annotations.Parameter[] parameters, Consumes classConsumes, Consumes methodConsumes, Operation operation, JsonView jsonViewAnnotation) {
         if (parameters == null) {
             return Optional.empty();
         }
         List<Parameter> parametersObject = new ArrayList<>();
         for (io.swagger.v3.oas.annotations.Parameter parameter : parameters) {
 
-            ResolvedParameter resolvedParameter = getParameters(ParameterProcessor.getParameterType(parameter), Collections.singletonList(parameter), operation, classConsumes, methodConsumes);
+            ResolvedParameter resolvedParameter = getParameters(ParameterProcessor.getParameterType(parameter), Collections.singletonList(parameter), operation, classConsumes, methodConsumes, jsonViewAnnotation);
             parametersObject.addAll(resolvedParameter.parameters);
         }
         if (parametersObject.size() == 0) {
@@ -1082,7 +1156,7 @@ public class Reader implements OpenApiReader {
     }
 
     protected ResolvedParameter getParameters(Type type, List<Annotation> annotations, Operation operation, javax.ws.rs.Consumes classConsumes,
-                                              javax.ws.rs.Consumes methodConsumes) {
+                                              javax.ws.rs.Consumes methodConsumes, JsonView jsonViewAnnotation) {
         final Iterator<OpenAPIExtension> chain = OpenAPIExtensions.chain();
         if (!chain.hasNext()) {
             return new ResolvedParameter();
@@ -1092,7 +1166,7 @@ public class Reader implements OpenApiReader {
         final OpenAPIExtension extension = chain.next();
         LOGGER.debug("trying extension {}", extension);
 
-        final ResolvedParameter extractParametersResult = extension.extractParameters(annotations, type, typesToSkip, components, classConsumes, methodConsumes, true, chain);
+        final ResolvedParameter extractParametersResult = extension.extractParameters(annotations, type, typesToSkip, components, classConsumes, methodConsumes, true, jsonViewAnnotation, chain);
         return extractParametersResult;
     }
 

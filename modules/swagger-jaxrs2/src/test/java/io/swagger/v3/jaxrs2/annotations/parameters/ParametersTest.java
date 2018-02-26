@@ -1,8 +1,10 @@
 package io.swagger.v3.jaxrs2.annotations.parameters;
 
+import com.google.common.collect.Sets;
 import io.swagger.v3.core.util.Yaml;
 import io.swagger.v3.jaxrs2.Reader;
 import io.swagger.v3.jaxrs2.annotations.AbstractAnnotationTest;
+import io.swagger.v3.jaxrs2.resources.ResourceWithJacksonBean;
 import io.swagger.v3.jaxrs2.resources.ResourceWithKnownInjections;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -263,6 +265,17 @@ public class ParametersTest extends AbstractAnnotationTest {
         assertEquals(extractedYAML, expectedYAML);
     }
 
+    @Test(description = "JsonUnwrapped, JsonIgnore, JsonValue should be honoured")
+    public void testJacksonFeatures() {
+        Reader reader = new Reader(new OpenAPI());
+        OpenAPI openAPI = reader.read(ResourceWithJacksonBean.class);
+        Yaml.prettyPrint(openAPI);
+        io.swagger.v3.oas.models.media.Schema o = openAPI.getComponents().getSchemas().get("JacksonBean");
+
+        assertEquals(o.getProperties().keySet(), Sets.newHashSet("identity", "bean", "code", "message",
+                "precodesuf", "premessagesuf"));
+    }
+
     static class SimpleOperations {
         @Path("/test")
         @POST
@@ -284,7 +297,7 @@ public class ParametersTest extends AbstractAnnotationTest {
                                         type = "int",
                                         format = "id",
                                         description = "the generated id",
-                                        readOnly = true
+                                        accessMode = Schema.AccessMode.READ_ONLY
                                 )),
                         @Parameter(in = ParameterIn.QUERY, name = "arrayParameter", required = true, explode = Explode.TRUE,
                                 array = @ArraySchema(maxItems = 10, minItems = 1,
@@ -296,10 +309,10 @@ public class ParametersTest extends AbstractAnnotationTest {
                                         type = "int",
                                         format = "id",
                                         description = "the generated id",
-                                        readOnly = true),
+                                        accessMode = Schema.AccessMode.READ_ONLY),
                                 content = @Content(schema = @Schema(type = "number",
                                         description = "the generated id",
-                                        readOnly = true))
+                                        accessMode = Schema.AccessMode.READ_ONLY))
                         ),
                         @Parameter(in = ParameterIn.QUERY, name = "arrayParameterImplementation", required = true, explode = Explode.TRUE,
                                 array = @ArraySchema(maxItems = 10, minItems = 1,
@@ -372,7 +385,7 @@ public class ParametersTest extends AbstractAnnotationTest {
                         type = "int",
                         format = "id",
                         description = "the generated id",
-                        readOnly = true
+                        accessMode = Schema.AccessMode.READ_ONLY
                 ))
         @Parameter(in = ParameterIn.QUERY, name = "arrayParameter", required = true, explode = Explode.TRUE,
                 array = @ArraySchema(maxItems = 10, minItems = 1,
@@ -384,10 +397,10 @@ public class ParametersTest extends AbstractAnnotationTest {
                         type = "int",
                         format = "id",
                         description = "the generated id",
-                        readOnly = true),
+                        accessMode = Schema.AccessMode.READ_ONLY),
                 content = @Content(schema = @Schema(type = "number",
                         description = "the generated id",
-                        readOnly = true))
+                        accessMode = Schema.AccessMode.READ_ONLY))
         )
         @Parameter(in = ParameterIn.QUERY, name = "arrayParameterImplementation", required = true, explode = Explode.TRUE,
                 array = @ArraySchema(maxItems = 10, minItems = 1,
